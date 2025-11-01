@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>岡山市サウスヴィレッジ - いちごスタンプラリー</title>
+  <style>
+    :root{--accent:#e53935;--bg:#fff;--muted:#666}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,'Hiragino Kaku Gothic ProN',Meiryo,Arial;line-height:1.5;margin:0;background:linear-gradient(#fff,#fff);color:#111;padding:18px}
+    header{display:flex;align-items:center;gap:12px}
+    .logo{width:64px;height:64px;border-radius:8px;background:var(--accent);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700}
+    main{max-width:820px;margin:18px auto}
+    h1{font-size:1.4rem;margin:8px 0}
+    .lead{color:var(--muted);margin-bottom:12px}
+    .card{border-radius:12px;padding:14px;border:1px solid #eee;margin:10px 0;background:#fafafa}
+    .stamps{display:flex;gap:10px;flex-wrap:wrap}
+    .stamp{width:120px;height:120px;border-radius:10px;border:2px dashed #eee;display:flex;align-items:center;justify-content:center;flex-direction:column}
+    .got{border-style:solid;background:linear-gradient(180deg,#fff7f7,#ffecec)}
+    .big{font-size:1.05rem;font-weight:700;color:var(--accent)}
+    .btn{display:inline-block;padding:8px 12px;border-radius:8px;background:var(--accent);color:#fff;text-decoration:none}
+    footer{font-size:0.85rem;color:var(--muted);margin-top:18px}
+    .hint{font-size:0.95rem;color:var(--muted)}
+    .qr-list{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    pre{white-space:pre-wrap;word-break:break-word;background:#fff;padding:8px;border-radius:6px;border:1px solid #eee}
+    @media(max-width:520px){.stamp{width:48%;height:100px}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="logo">SV</div>
+  <div>
+    <div style="font-size:0.95rem;color:var(--muted)">岡山市サウスヴィレッジ</div>
+    <div style="font-weight:700">博士とフルーくんのいちごスタンプラリー</div>
+  </div>
+</header>
+<main>
+  <section class="card">
+    <p class="lead">スマホでQRを読み取って、園内5か所のスタンプを集めよう。コンプリートすると当日限りの特典がもらえます。</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <a class="btn" id="btn-progress" href="?page=progress">スタンプ状況を確認</a>
+      <a class="btn" id="btn-reset" href="#" style="background:#757575">スタンプをリセット</a>
+    </div>
+    <p class="hint">※本システムはスマホのブラウザ(localStorage)に保存します。端末を変えると引き継げません。</p>
+  </section>
+
+  <section class="card" id="point-area" style="display:none">
+    <div id="point-message" class="big"></div>
+    <p id="point-description" class="hint"></p>
+    <div style="margin-top:10px"><a id="goto-progress" class="btn" href="?page=progress">進捗を見る</a></div>
+  </section>
+
+  <section class="card" id="progress-area" style="display:none">
+    <h2>現在のスタンプ状況</h2>
+    <div id="stamps" class="stamps"></div>
+    <div id="complete-area" style="margin-top:12px"></div>
+  </section>
+
+  <section class="card">
+    <h3>管理者メモ（QRの生成・設置）</h3>
+    <p class="hint">各スポット用のURLは次の形式です（公開したページのURLが <code>https://example.com/stamp.html</code> だと仮定）。</p>
+    <pre>ハウス入口: https://example.com/stamp.html?point=1
+ドーナツ店: https://example.com/stamp.html?point=2
+ジュース店: https://example.com/stamp.html?point=3
+パン工房: https://example.com/stamp.html?point=4
+マーケット: https://example.com/stamp.html?point=5</pre>
+    <p class="hint">このURLをQRに変換して各スポットに掲示してください。</p>
+    <div style="margin-top:8px">
+      <div style="font-weight:700">QR設置のコツ</div>
+      <ul>
+        <li>高さはスマホのカメラ位置（手持ち）に合わせる（胸から目線）</li>
+        <li>QRの下に短い指示文（例：「QRを読み取ってスタンプを獲得」）を追加</li>
+        <li>言語対応は将来追加予定なら、国旗アイコンで別QRを並べる</li>
+      </ul>
+    </div>
+  </section>
+
+  <footer>
+    <div>作成: 岡山市サウスヴィレッジ用テンプレート</div>
+  </footer>
+</main>
+
+<script>
+// --- 設定 ---
+const SPOTS = [
+  {id: '1', title: 'ハウス入口', desc: 'ここが苺ハウス入口。日照と水管理で味が変わるぞ。'},
+  {id: '2', title: 'ドーナツ店', desc: '採れたて苺をトッピングした限定ドーナツあり。'},
+  {id: '3', title: 'ジュース店', desc: 'フレッシュジュースで苺の甘みを比較しよう。'},
+  {id: '4', title: 'パン工房', desc: 'パン屋の苺サンドを味わうコーナー。'},
+  {id: '5', title: 'マーケット', desc: 'ファーマーズマーケットで地元産をチェック。'}
+];
+const STORAGE_KEY = 'sv_stamps_v1'; // バージョン管理用
+// ----------------
+
+function todayISO(){
+  const d = new Date();
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,'0')+"-"+String(d.getDate()).padStart(2,'0');
+}
+
+function loadState(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return {date: todayISO(), stamps: []};
+    const obj = JSON.parse(raw);
+    if(obj.date !== todayISO()) return {date: todayISO(), stamps: []};
+    return obj;
+  }catch(e){
+    return {date: todayISO(), stamps: []};
+  }
+}
+
+function saveState(state){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function addStamp(id){
+  const state = loadState();
+  if(!state.stamps.includes(id)){
+    state.stamps.push(id);
+    saveState(state);
+    return true;
+  }
+  return false;
+}
+
+function resetStamps(){
+  const state = {date: todayISO(), stamps: []};
+  saveState(state);
+}
+
+function getStamps(){
+  return loadState().stamps || [];
+}
+
+// URL パラメータ判定
+const params = new URLSearchParams(location.search);
+const point = params.get('point');
+const page = params.get('page');
+
+// 要素
+const pointArea = document.getElementById('point-area');
+const progressArea = document.getElementById('progress-area');
+const pointMessage = document.getElementById('point-message');
+const pointDescription = document.getElementById('point-description');
+const stampsContainer = document.getElementById('stamps');
+const completeArea = document.getElementById('complete-area');
+const btnReset = document.getElementById('btn-reset');
+
+btnReset.addEventListener('click',(e)=>{e.preventDefault();if(confirm('スタンプを本当にリセットしますか？（当日のみ）')){resetStamps();alert('リセットしました');location.href='?page=progress'}})
+
+if(point){
+  // スタンプ取得処理
+  const spot = SPOTS.find(s=>s.id===point);
+  if(spot){
+    const added = addStamp(point);
+    pointArea.style.display='block';
+    pointMessage.textContent = added ? `🍓 スタンプ「${spot.title}」を獲得しました！` : `✅ 既にスタンプ「${spot.title}」は獲得済みです`;
+    pointDescription.textContent = spot.desc;
+  } else {
+    pointArea.style.display='block';
+    pointMessage.textContent = '不明なポイントです';
+    pointDescription.textContent = '';
+  }
+}
+
+if(page==='progress' || !point && !page){
+  progressArea.style.display='block';
+  renderProgress();
+}
+
+function renderProgress(){
+  stampsContainer.innerHTML='';
+  const have = getStamps();
+  SPOTS.forEach(s=>{
+    const el = document.createElement('div');
+    el.className='stamp'+(have.includes(s.id)?' got':'');
+    el.innerHTML = `<div style="font-weight:700">${s.title}</div><div style="font-size:0.9rem;color:var(--muted)">`+(have.includes(s.id)?'獲得済':'未取得')+`</div>`;
+    stampsContainer.appendChild(el);
+  });
+  // コンプリート判定
+  if(have.length >= SPOTS.length){
+    completeArea.innerHTML = `<div class="big">🎉 コンプリート！おめでとうございます！</div><p class="hint">この画面を提示すると、ドーナツ店で限定特典が受けられます（本日限り）。</p>`;
+  } else {
+    completeArea.innerHTML = `<p class="hint">あと ${SPOTS.length - have.length} か所でコンプリートです。</p>`;
+  }
+}
+
+// 初期表示（QR一覧を下に表示すると便利）
+(function showQRList(){
+  // 管理者向けにQR一覧を表示（公開時は削ってOK）
+  const area = document.createElement('div');
+  area.className='card';
+  area.innerHTML = `<h3>QR一覧（テンプレ）</h3><div class="qr-list" id="qr-list"></div>`;
+  document.querySelector('main').appendChild(area);
+  const list = document.getElementById('qr-list');
+  const base = location.origin + location.pathname; // stamp.html として配置される想定
+  SPOTS.forEach(s=>{
+    const a = document.createElement('div');
+    a.innerHTML = `<div style="font-weight:700">${s.title}</div><div style="font-size:0.9rem;color:var(--muted)">${base}?point=${s.id}</div>`;
+    list.appendChild(a);
+  });
+})();
+
+</script>
+</body>
+</html>
